@@ -1,0 +1,58 @@
+<html><meta content='text/html; charset=UTF-8' http-equiv='content-type'>
+<style>
+body { background-color: linen; font-family: 'Verdana'; }
+li { font-family: 'Courier' }
+</style>
+<head><title>Covid19 Charts</title>
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+
+<script>
+
+google.charts.load('current', {'packages':['corechart']});
+      google.charts.setOnLoadCallback(startFetch);
+
+
+function startFetch()
+{
+  var loc=window.location.hash.substring(1)
+fetch('https://covid19-data.1209k.com/chart_data/cases/' + loc)
+  .then(parseJson);
+
+}
+
+function parseJson( resp )
+{
+  resp.json().then(drawChart);
+
+}
+
+function drawChart( json )
+{
+  console.log(json); 
+
+
+
+        var data = google.visualization.arrayToDataTable(json);
+
+        var options = {
+          title: 'Confirmed Cases',
+          curveType: 'none',
+          legend: { position: 'bottom' },
+					vAxis: { scaleType: 'log' }
+        };
+
+        var chart = new google.visualization.LineChart(document.getElementById('curve_chart'));
+
+        chart.draw(data, options);
+}
+
+
+</script>
+  </head>
+  <body>
+    <div id="outer" style="display: flex; flex-flow: column; height: 100%;">
+      <a href='index.html'>Charts</a>
+      <div id="curve_chart" style="flex-grow: 1" ></div>
+    </div>
+  </body>
+</html>
