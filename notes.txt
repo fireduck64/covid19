@@ -11,4 +11,14 @@ https://www.census.gov/data/tables/time-series/demo/popest/2010s-counties-total.
 
 https://www2.census.gov/programs-surveys/popest/datasets/2010-2019/counties/totals/co-est2019-alldata.csv
 
+Query.conf example:
+
+data_path=../data.git
+
+web_port=8115
+
+
+pop_path=../pop/co-est2019-alldata.csv
+
+
 
