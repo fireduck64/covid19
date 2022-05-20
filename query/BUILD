@@ -19,6 +19,10 @@ java_binary(
   runtime_deps = [
     ":covidquerylib",
   ],
+  jvm_flags = [
+    "-Xmx6g",
+  ],
+
 )
 
 

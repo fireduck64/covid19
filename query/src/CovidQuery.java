@@ -6,6 +6,7 @@ import duckutil.Config;
 import net.minidev.json.JSONObject;
 import net.minidev.json.JSONArray;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableList;
 import java.io.FileInputStream;
 import java.io.File;
 import java.util.LinkedList;
@@ -47,6 +48,7 @@ public class CovidQuery
   protected volatile TreeMap<Integer, String> fips_lookup=new TreeMap<>();
   protected volatile ImmutableMap<Integer, Long> pop_by_fips = null;
   protected volatile ImmutableMap<Integer, LocationData> location_data_map = null;
+  protected volatile ImmutableMap<Integer, LocationData> location_data_avg_map = null;
   public static final Integer US_FIPS = 0;
 
   protected final Config config;
@@ -121,7 +123,7 @@ public class CovidQuery
   {
     public UpdateThread()
     {
-      super(30000);
+      super(600000);
       
       config.require("data_path");
     }
@@ -139,9 +141,22 @@ public class CovidQuery
 
       m.put(US_FIPS, us);
 
-      m.putAll(parseFile( new File(config.get("data_path"), "us-counties.csv")));
+      List<File> county_paths = new LinkedList<>();
+      county_paths.add(new File(config.get("data_path"), "us-counties-2020.csv"));
+      county_paths.add(new File(config.get("data_path"), "us-counties-2021.csv"));
+      county_paths.add(new File(config.get("data_path"), "us-counties-2022.csv"));
+
+			m.putAll(parseFile( county_paths));
+
 
       location_data_map = ImmutableMap.copyOf(m);
+
+      TreeMap<Integer, LocationData> m_avg = new TreeMap<>();
+      for(Map.Entry<Integer,LocationData> me : m.entrySet())
+      {
+        m_avg.put(me.getKey(), me.getValue().getAverage());
+      }
+      location_data_avg_map = ImmutableMap.copyOf(m_avg);
 
       updatePopMap(new File(config.get("pop_path")));
 
@@ -198,10 +213,20 @@ public class CovidQuery
 
     }
 
-    protected Map<Integer, LocationData> parseFile(File path)
+   protected Map<Integer, LocationData> parseFile(File path)
       throws Exception
     {
-      List<Map<String, String> > raw = CSVReader.readCSV(new FileInputStream(path));
+      return parseFile(ImmutableList.of(path));
+    }
+    protected Map<Integer, LocationData> parseFile(List<File> paths)
+      throws Exception
+    {
+
+      List<Map<String, String> > raw = new LinkedList<>();
+      for(File p : paths)
+      {
+        raw.addAll(CSVReader.readCSV(new FileInputStream(p)));
+      }
 
       Map<Integer, LocationData> m = new TreeMap<>();
 
@@ -263,7 +288,40 @@ public class CovidQuery
 
     public void addData(JSONObject json)
     {
+      
       date_map.put((String)json.get("date"), json);
+    }
+
+    public LocationData getAverage()
+    {
+      LocationData avg = new LocationData();
+      LinkedList<JSONObject> last_week = new LinkedList<>();
+      for(String date : date_map.keySet())
+      {
+        last_week.add(date_map.get(date));
+        while (last_week.size() > 8) last_week.removeFirst();
+        double c = 0.0;
+        double d = 0.0;
+        for(JSONObject o : last_week)
+        {
+          c += Double.parseDouble(o.get("cases").toString());
+          d += Double.parseDouble(o.get("deaths").toString());
+
+        }
+        c = c / last_week.size();
+        d = d / last_week.size();
+
+        JSONObject s = new JSONObject();
+        s.put("cases", c);
+        s.put("deaths", d);
+        s.put("date", date);
+
+        avg.addData(s);
+
+
+      }
+      return avg;
+
     }
 
     public static LocationData merge(Collection<LocationData> lst)
@@ -279,15 +337,15 @@ public class CovidQuery
 
       for(String date : dates)
       {
-        long cases =0;
-        long deaths = 0;
+        double cases =0;
+        double deaths = 0;
 
         for(LocationData ld : lst)
         {
           if (ld.date_map.containsKey(date))
           {
-            long c = (Long) ld.date_map.get(date).get("cases");
-            long d = (Long) ld.date_map.get(date).get("deaths");
+            double c = Double.parseDouble( ld.date_map.get(date).get("cases").toString());
+            double d = Double.parseDouble( ld.date_map.get(date).get("deaths").toString());
             cases += c;
             deaths += d;
 
@@ -552,7 +610,7 @@ public class CovidQuery
               row.add(date);
               for(Integer fips : location_fips)
               {
-                JSONObject js = location_data_map.get(fips).date_map.get(date);
+                JSONObject js = location_data_avg_map.get(fips).date_map.get(date);
                 double v = 0.0;
                 if (js == null)
                 {
@@ -560,7 +618,7 @@ public class CovidQuery
                 }
                 else
                 {
-                  long c = (Long)js.get(type);
+                  double c = Double.parseDouble(js.get(type).toString());
                   if (pop_normal)
                   {
                     if (!pop_by_fips.containsKey(fips))
@@ -688,6 +746,7 @@ public class CovidQuery
       catch(Throwable t)
       {
         System.out.println("Exception on fips- " + fips + ": " + t);
+        t.printStackTrace();
       }
       
 
